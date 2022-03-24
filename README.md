@@ -1,5 +1,6 @@
 # Staking contract for ERC20 token standart with ability to change staking logic settings
 Contract address - 0x9D0E0f2c60e69cfF26Bd49B6EB8B538D4982B54C
+
 Etherscan virified - https://ropsten.etherscan.io/address/0x9D0E0f2c60e69cfF26Bd49B6EB8B538D4982B54C#code
 
 Staking logic: contract recieve LP tokens and afrer x minutes charge reward tokens to account.
