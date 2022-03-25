@@ -1,7 +1,7 @@
 # Staking contract for ERC20 token standart with ability to change staking logic settings
-Contract address - 0x9D0E0f2c60e69cfF26Bd49B6EB8B538D4982B54C
+Contract address - 0x562C05167d8eEbDC9E8f52A4Ba8aBD0bE9cB0c34
 
-Etherscan virified - https://ropsten.etherscan.io/address/0x9D0E0f2c60e69cfF26Bd49B6EB8B538D4982B54C#code
+Etherscan virified - https://ropsten.etherscan.io/address/0x562C05167d8eEbDC9E8f52A4Ba8aBD0bE9cB0c34#code
 
 Staking logic: contract recieve LP tokens and afrer x minutes charge reward tokens to account.
 Available functions: stake(amount), unstake(), claim(), changeStakingSettings()
