@@ -7,9 +7,9 @@ const ADMIN = "0xdf8b4c520ffe197c5343c6f5aec59570151ef9a492f2c624fd45ddde6135ec4
 
 describe("Staking", function() {
     const initialSupply: number = 100000000000;
-    const claimFrozenTimeInMinutes: number = 10;
-    const unstakeFrozenTimeInMinutes: number = 20;
-    const rewardPersentage: number = 50;
+    const claimFrozenTime: number = 600;
+    const unstakeFrozenTime: number = 600;
+    const rewardPersentage: number = 10;
 
     let staking: Staking;
     let stakingToken: ERC20Mock;
@@ -19,9 +19,6 @@ describe("Staking", function() {
 
     beforeEach(async function() {
         [owner, staker] = await ethers.getSigners();
-        const Staking = await ethers.getContractFactory("Staking");
-        staking = await Staking.deploy();
-        await staking.deployed();
 
         const StakingToken = await ethers.getContractFactory("ERC20Mock");
         stakingToken = await StakingToken.deploy("StakingToken", "STK", initialSupply);
@@ -31,25 +28,20 @@ describe("Staking", function() {
         rewardToken = await RewardToken.deploy("RewardToken", "RWRD", initialSupply);
         await rewardToken.deployed();
 
-        await staking.initialize(stakingToken.address, rewardToken.address, rewardPersentage, unstakeFrozenTimeInMinutes, claimFrozenTimeInMinutes);
+        const Staking = await ethers.getContractFactory("Staking");
+        staking = await Staking.deploy(
+            stakingToken.address, 
+            rewardToken.address, 
+            rewardPersentage, 
+            claimFrozenTime, 
+            unstakeFrozenTime);
+        await staking.deployed();
 
         await rewardToken.transfer(staking.address, initialSupply);
     })
 
     it("Should be deployed", async function() {
         expect(staking.address).to.be.properAddress;
-    })
-
-    describe("Initialize", function() {
-
-        it("Should be initialized", async function() {
-            expect(await staking.initialized()).to.equal(true);
-        })
-
-        it("Should return error with message because contract can't initialize twice", async function() {
-            await expect(staking.initialize(stakingToken.address, rewardToken.address, rewardPersentage, unstakeFrozenTimeInMinutes, claimFrozenTimeInMinutes))
-            .to.be.revertedWith("Contract has already initialized!");
-        })
     })
 
     describe("Stake", function() {
@@ -80,7 +72,7 @@ describe("Staking", function() {
             await stakingToken.approve(staking.address, 600);
             await staking.connect(owner).stake(150);
 
-            await network.provider.send("evm_increaseTime", [50000000]);
+            await network.provider.send("evm_increaseTime", [650]);
             await network.provider.send("evm_mine");
 
             await expect(() => staking.connect(owner).unstake())
@@ -88,7 +80,7 @@ describe("Staking", function() {
 
             await staking.connect(owner).stake(150);
 
-            await network.provider.send("evm_increaseTime", [50000000]);
+            await network.provider.send("evm_increaseTime", [650]);
             await network.provider.send("evm_mine");
 
             await expect(staking.connect(owner).unstake())
@@ -115,26 +107,24 @@ describe("Staking", function() {
 
     describe("Claim", function() {
 
-        it("Should claim all reward tokens and emit Claimed event", async function() {
-            const amountTokensToStake: number = 150;
-            const amountTokensToReward: number = amountTokensToStake * rewardPersentage / 100;
-
+        it("Should claim all reward tokens and emit Claimed event", async function() {;
             await stakingToken.approve(staking.address, 600);
             await staking.connect(owner).stake(150);
 
-            await network.provider.send("evm_increaseTime", [50000000]);
+            await network.provider.send("evm_increaseTime", [600]);
             await network.provider.send("evm_mine");
 
             await expect(() => staking.connect(owner).claim())
-            .to.changeTokenBalance(rewardToken, owner, amountTokensToReward);
+            .to.changeTokenBalance(rewardToken, owner, 15);
 
             await staking.connect(owner).stake(150);
 
-            await network.provider.send("evm_increaseTime", [50000000]);
+            await network.provider.send("evm_increaseTime", [600]);
             await network.provider.send("evm_mine");
 
             await expect(staking.claim())
-            .to.emit(staking, "Claimed");
+            .to.emit(staking, "Claimed")
+            .withArgs(owner.address, 30);
         })
 
         it("Should return error with message because staker try to claim too early", async function() {
@@ -149,7 +139,7 @@ describe("Staking", function() {
             await stakingToken.approve(staking.address, 600);
             await staking.connect(owner).stake(150);
 
-            await network.provider.send("evm_increaseTime", [50000000]);
+            await network.provider.send("evm_increaseTime", [700]);
             await network.provider.send("evm_mine");
 
             await staking.connect(owner).claim();
@@ -166,8 +156,8 @@ describe("Staking", function() {
             await staking.changeStakingSettings(40, 5, 8);
 
             expect(await staking.rewardPercentage()).to.equal(40);
-            expect(await staking.claimFrozenTimeInMinutes()).to.equal(5);
-            expect(await staking.unstakeFrozenTimeInMinutes()).to.equal(8);
+            expect(await staking.claimFrozenTime()).to.equal(5);
+            expect(await staking.unstakeFrozenTime()).to.equal(8);
         })
 
         it("Should return error because staker isn't ADMIN", async function() {
