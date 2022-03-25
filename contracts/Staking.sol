@@ -12,40 +12,44 @@ contract Staking is AccessControl{
 
     IERC20 public stakableToken;
     IERC20 public rewardToken;
-    bool public initialized;
     uint256 public rewardPercentage;
-    uint256 public claimFrozenTimeInMinutes;
-    uint256 public unstakeFrozenTimeInMinutes;
+    uint256 public claimFrozenTime;
+    uint256 public unstakeFrozenTime;
     bytes32 public constant ADMIN = keccak256(abi.encodePacked("ADMIN"));
 
     struct Staker {
         uint256 stake;
         uint256 reward;
         uint256 rewardClaimed;
-        uint256 stakingTimestamp;
+        uint256 startingTimestamp;
+        uint256 updatedTimestamp;
     }
      
     mapping (address => Staker) public stakers;
 
-    function initialize(
+    constructor(
         address _stakableTokenAddress, 
         address _rewardTokenAddress,
         uint256 _rewardPercentage,
-        uint256 _claimFrozenTimeInMinutes,
-        uint256 _unstakeFrozenTimeInMinutes) external onlyInitialized{
+        uint256 _claimFrozenTime,
+        uint256 _unstakeFrozenTime) {
         stakableToken = IERC20(_stakableTokenAddress);
         rewardToken = IERC20(_rewardTokenAddress);
         rewardPercentage = _rewardPercentage;
-        claimFrozenTimeInMinutes = _claimFrozenTimeInMinutes;
-        unstakeFrozenTimeInMinutes = _unstakeFrozenTimeInMinutes;
+        claimFrozenTime = _claimFrozenTime;
+        unstakeFrozenTime = _unstakeFrozenTime;
         _grantRole(ADMIN, msg.sender);
-        initialized = true;
     }
 
     function stake(uint256 _amount) external {
         require(_amount > 0, "Amount of tokens to stake should be positive");
+        stakers[msg.sender].updatedTimestamp = block.timestamp;
+        if(stakers[msg.sender].stake == 0) {
+            stakers[msg.sender].startingTimestamp = block.timestamp;
+        } else {
+            calculateReward(msg.sender);
+        }
         stakers[msg.sender].stake += _amount;
-        stakers[msg.sender].stakingTimestamp = block.timestamp;
         stakableToken.safeTransferFrom(msg.sender, address(this), _amount);
         emit Staked(msg.sender, _amount);
     }
@@ -53,48 +57,39 @@ contract Staking is AccessControl{
     function unstake() external onlyAfterUnstakeFrozenPeriod() {
         require(stakers[msg.sender].stake > 0, "You don't have tokens to unstake");
         uint256 currentStake = stakers[msg.sender].stake;
+        claim();
         stakers[msg.sender].stake = 0;
         stakableToken.safeTransfer(msg.sender, currentStake);
         emit Unstaked(msg.sender, currentStake);
     }
 
-    function claim() external onlyAfterClaimFrozenPeriod {
-        uint256 currentReward = calculateReward(msg.sender) - stakers[msg.sender].rewardClaimed;
+    function claim() public onlyAfterClaimFrozenPeriod {
+        calculateReward(msg.sender);
+        uint256 currentReward = stakers[msg.sender].reward - stakers[msg.sender].rewardClaimed;
         require(currentReward > 0, "You don't have tokens to claim");
-        stakers[msg.sender].reward = 0;
         stakers[msg.sender].rewardClaimed += currentReward;
         rewardToken.safeTransfer(msg.sender, currentReward);
         emit Claimed(msg.sender, currentReward);
     }
 
-    function changeStakingSettings(uint256 _rewardPercentage, uint256 _claimFrozenTimeInMinutes, uint256 _unstakeFrozenTimeInMinutes) external onlyRole(ADMIN) {
+    function changeStakingSettings(uint256 _rewardPercentage, uint256 _claimFrozenTime, uint256 _unstakeFrozenTime) external onlyRole(ADMIN) {
         rewardPercentage = _rewardPercentage;
-        claimFrozenTimeInMinutes = _claimFrozenTimeInMinutes;
-        unstakeFrozenTimeInMinutes = _unstakeFrozenTimeInMinutes;
+        claimFrozenTime = _claimFrozenTime;
+        unstakeFrozenTime = _unstakeFrozenTime;
     }
 
-    function calculateReward(address _staker) internal returns(uint256) {
-        stakers[_staker].reward = stakers[_staker].stake * rewardPercentage / 100;
-        return stakers[_staker].reward;
-    }
-
-    function calculateTimestampDifferenceInMinutes (uint256 _startingTimestamp) internal view returns(uint256) {
-        return (block.timestamp - _startingTimestamp) / 60;
-    }
-
-
-    modifier onlyInitialized() {
-        require(!initialized, "Contract has already initialized!");
-        _;
+    function calculateReward(address _staker) internal {
+        stakers[_staker].reward += stakers[_staker].stake * rewardPercentage * (block.timestamp - stakers[_staker].updatedTimestamp) / 100 / claimFrozenTime;
+        stakers[_staker].updatedTimestamp = block.timestamp;
     }
 
     modifier onlyAfterUnstakeFrozenPeriod() {
-        require(calculateTimestampDifferenceInMinutes(stakers[msg.sender].stakingTimestamp) > unstakeFrozenTimeInMinutes, "You can not unstake tokens now, please try later");
+        require(block.timestamp - stakers[msg.sender].startingTimestamp > unstakeFrozenTime, "You can not unstake tokens now, please try later");
         _;
     }
 
     modifier onlyAfterClaimFrozenPeriod() {
-        require(calculateTimestampDifferenceInMinutes(stakers[msg.sender].stakingTimestamp) > claimFrozenTimeInMinutes, "You can not claim tokens now, please try later");
+        require(block.timestamp - stakers[msg.sender].startingTimestamp > claimFrozenTime, "You can not claim tokens now, please try later");
         _;
     }
 
